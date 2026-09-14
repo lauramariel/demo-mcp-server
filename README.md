@@ -167,6 +167,51 @@ If you'd rather not run Caddy yourself:
   instead of a bare server, it likely terminates HTTPS for you already —
   in that case skip Caddy and just deploy the app image directly.
 
+## CI: building the image automatically
+
+`.github/workflows/docker-publish.yml` builds the Docker image and pushes
+it to the GitHub Container Registry (`ghcr.io`) on:
+- every push to `main` (tagged `latest` and with the commit SHA),
+- every pushed tag matching `v*.*.*` (tagged with that semver, plus
+  `major.minor`),
+- pull requests targeting `main` (build-only, not pushed — validates the
+  image still builds),
+- and manually via the "Run workflow" button (`workflow_dispatch`).
+
+It builds for both `linux/amd64` and `linux/arm64`, and uses the GitHub
+Actions cache so incremental builds are fast. It authenticates to `ghcr.io`
+with the repo's built-in `GITHUB_TOKEN` — no registry secrets to set up.
+
+After the first successful run on `main`, the image is published at:
+
+```
+ghcr.io/lauramariel/demo-mcp-server:latest
+```
+
+By default a package published this way is **private**; go to the
+package's settings on GitHub (from the repo's sidebar → Packages) if you
+want it public, or otherwise grant your deploy server access
+(`docker login ghcr.io` with a PAT that has `read:packages`).
+
+If the workflow fails to push with a permissions error, check
+**Settings → Actions → General → Workflow permissions** is set to "Read
+and write permissions" for the repo.
+
+To run the CI-built image on your server instead of building from source
+there, swap `docker compose up -d --build` for:
+
+```bash
+docker pull ghcr.io/lauramariel/demo-mcp-server:latest
+docker run -d --name demo-crm -p 3000:3000 \
+  -e MCP_API_KEY=some-long-random-secret \
+  -v crm-data:/app/data \
+  ghcr.io/lauramariel/demo-mcp-server:latest
+```
+
+(or add `image: ghcr.io/lauramariel/demo-mcp-server:latest` next to
+`build: .` in `docker-compose.yml`, then use `docker compose pull` there
+instead of `--build`).
+
 ## Using it from Claude Code / Claude Desktop
 
 Add it as a local MCP server, e.g. in Claude Code:

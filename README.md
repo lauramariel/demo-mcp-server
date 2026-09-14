@@ -50,6 +50,22 @@ directly via `tsx`).
 Data lives in `data/crm.db`, created and seeded automatically on first run.
 To reset it to the seed data: `npm run reset-db`.
 
+By default the data directory is `data/` next to the project. Set
+`DATA_DIR` to change where the SQLite file is created and read from —
+needed on hosting platforms that restrict which paths a process may write
+to (for example, a sandboxed agent gateway that only allows writes under
+`/tmp` or `/.cache` and fails startup if a directory is created anywhere
+else):
+
+```bash
+DATA_DIR=/tmp/demo-crm-data npm start
+```
+
+Keep in mind `/tmp` is usually cleared on restart on such platforms, so
+data won't persist there the way it does with a real volume in Docker/K8s
+— that's a property of the platform, not something this server can work
+around.
+
 ## Running as a remote server (for an MCP gateway)
 
 The stdio entrypoint (`npm start`) is for clients that spawn the server as

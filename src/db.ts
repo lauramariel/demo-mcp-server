@@ -4,7 +4,11 @@ import { dirname, join } from "node:path";
 import { mkdirSync, existsSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const dataDir = join(__dirname, "..", "data");
+// Some hosting platforms only allow writes under specific paths (e.g. /tmp
+// or /.cache) and fail startup if a process creates directories elsewhere.
+// DATA_DIR lets the deploy target override where the SQLite file lives;
+// it defaults to a `data/` dir next to the project for local/Docker use.
+const dataDir = process.env.DATA_DIR ?? join(__dirname, "..", "data");
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
 const dbPath = join(dataDir, "crm.db");

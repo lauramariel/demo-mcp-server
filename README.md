@@ -1,9 +1,9 @@
 # Demo CRM MCP Server
 
 A demo [MCP](https://modelcontextprotocol.io) server exposing a small CRM
-(companies, contacts, deals, activities) as tools. Data is stored in SQLite
-(Node's built-in `node:sqlite`, no native deps), pre-seeded with sample
-records. Reads return real data and writes persist across restarts.
+(companies, contacts, deals, activities) as tools. Data is stored in
+SQLite via Node's built-in `node:sqlite`, pre-seeded with sample records.
+Reads return real data and writes persist across restarts.
 
 ## Tools
 
@@ -44,33 +44,31 @@ npm run build
 npm start          # starts the MCP server on stdio
 ```
 
-For local iteration without rebuilding: `npm run dev` (runs `src/index.ts`
-directly via `tsx`).
+`npm run dev` runs `src/index.ts` directly via `tsx`, for local iteration
+without rebuilding.
 
-Data lives in `data/crm.db`, created and seeded automatically on first run.
-To reset it to the seed data: `npm run reset-db`.
+Data lives in `data/crm.db`, created and seeded on first run. `npm run
+reset-db` wipes it back to the seed data.
 
-By default the data directory is `data/` next to the project. Set
-`DATA_DIR` to change where the SQLite file is created and read from —
-useful on hosting platforms that restrict which paths a process may write
-to (for example, a sandboxed agent gateway that only allows writes under
-`/tmp` or `/.cache`):
+### Data directory
+
+The default data directory is `data/` next to the project. Override it
+with `DATA_DIR`:
 
 ```bash
 DATA_DIR=/tmp/demo-crm-data npm start
 ```
 
-If `DATA_DIR` isn't set and the default `data/` directory turns out not to
-be writable (e.g. a read-only container filesystem with no volume mounted
-there), the server automatically falls back to a directory under the OS
-temp dir (`/tmp` on Linux) instead of crashing on startup — so it comes up
-even with no environment configuration at all, though setting `DATA_DIR`
+This matters on platforms that restrict which paths a process can write
+to — a sandboxed agent gateway, for example, that only allows writes
+under `/tmp` or `/.cache`. If `DATA_DIR` isn't set and the default `data/`
+directory isn't writable, the server falls back to a directory under the
+OS temp dir on its own rather than crashing on startup. Setting `DATA_DIR`
 explicitly is still the more predictable option when you can.
 
-Keep in mind `/tmp` (and similar sandboxed paths) are usually cleared when
-the container/pod is recreated, so data won't persist the way it does with
-a real volume in Docker/K8s — that's a property of the platform, not
-something this server can work around.
+Note that `/tmp` and similar sandboxed paths are usually wiped when the
+container or pod is recreated, so data won't survive the way it does with
+a real volume in Docker/Kubernetes.
 
 ## Running as a remote server (for an MCP gateway)
 
@@ -83,35 +81,32 @@ npm run build
 MCP_API_KEY=some-long-random-secret PORT=3000 npm run start:http
 ```
 
-This starts an Express server implementing the
-[MCP Streamable HTTP transport](https://modelcontextprotocol.io/docs/concepts/transports)
-at `POST/GET/DELETE http://localhost:3000/mcp`, plus a `GET /healthz`
-check.
+This starts an Express server implementing the [MCP Streamable HTTP
+transport](https://modelcontextprotocol.io/docs/concepts/transports) at
+`POST/GET/DELETE http://localhost:3000/mcp`, plus a `GET /healthz` check.
 
-It's session-based, per the spec: the first `initialize` call returns an
-`Mcp-Session-Id` header, and subsequent requests from that client must
-include it. Each session gets its own `McpServer`/transport pair, but all
-sessions share the same SQLite file, so writes from one client are visible
-to reads from another.
+It's session-based, per the spec. The first `initialize` call returns an
+`Mcp-Session-Id` header, and subsequent requests from that client include
+it. Each session gets its own `McpServer`/transport pair, but all sessions
+share the same SQLite file, so writes from one client show up in reads
+from another.
 
-**Auth**: if `MCP_API_KEY` is set, `/mcp` requests must include
-`Authorization: Bearer <key>` or they get a 401. If unset, the server logs
-a warning and runs unauthenticated — fine for localhost testing, not for
-anything network-reachable.
+If `MCP_API_KEY` is set, `/mcp` requests need `Authorization: Bearer
+<key>` or they get a 401. If it's unset, the server logs a warning and
+runs unauthenticated — fine for localhost testing, not for anything
+network-reachable.
 
-**Pointing a gateway at it**: use `http://<host>:<port>/mcp` as the
-Streamable HTTP endpoint, plus the bearer token if one is set. If the
-gateway runs elsewhere and needs to reach this server, either deploy it
-somewhere the gateway can reach (see Docker section below) or, for quick
-local testing, tunnel it with `ngrok http 3000` and use the resulting
-`https://*.ngrok.app/mcp` URL.
+Point a gateway at `http://<host>:<port>/mcp`, plus the bearer token if
+one is set. If the gateway runs elsewhere and needs to reach this server,
+deploy it somewhere reachable (see the Docker section) or tunnel it for
+quick local testing with `ngrok http 3000`.
 
 ### Querying it with curl
 
-Streamable HTTP is session-based, so it's a three-step handshake — POST
-`initialize`, POST the `notifications/initialized` notification, then POST
-whatever request you actually want — reusing the `Mcp-Session-Id` header
-the first response returns:
+Streamable HTTP is session-based, so it takes three requests: `initialize`,
+then the `notifications/initialized` notification, then whatever you
+actually want, reusing the `Mcp-Session-Id` header from the first
+response.
 
 ```bash
 HOST=http://localhost:3000   # or your https:// domain
@@ -142,11 +137,10 @@ curl -s -X POST "$HOST/mcp" \
   -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_pipeline_summary","arguments":{}}}'
 ```
 
-The `notifications/initialized` step is required — going straight from
-`initialize` to `tools/list` gets rejected. Responses come back as
-`text/event-stream` (`event: message` / `data: {...}`), not plain JSON,
-since that's what the Streamable HTTP transport uses; the JSON payload is
-the `data:` line.
+Skipping straight from `initialize` to `tools/list` gets rejected — the
+`notifications/initialized` step is required. Responses come back as
+`text/event-stream` (`event: message` / `data: {...}`) rather than plain
+JSON; the payload is the `data:` line.
 
 ## Docker
 
@@ -160,30 +154,26 @@ docker run -d \
   demo-crm-mcp-server
 ```
 
-Or with Compose (reads `MCP_API_KEY` from the shell env or a `.env` file in
-this directory):
+Or with Compose, which reads `MCP_API_KEY` from the shell env or a `.env`
+file:
 
 ```bash
 MCP_API_KEY=some-long-random-secret docker compose up -d --build
 ```
 
-(This brings up both the app and the `caddy` service described below, so
-it also needs `DOMAIN` set — see the next section. For a plain HTTP
-container with no TLS in front of it, use `docker run` as above instead.)
+Compose also brings up the `caddy` service described below, so it needs
+`DOMAIN` set too. For a plain HTTP container with no TLS in front of it,
+use `docker run` instead.
 
-Notes on the image:
-- Multi-stage build: compiles TypeScript in a builder stage, ships only
-  production `node_modules` + `dist` in the runtime stage.
-- No native modules to compile, so it's a plain `node:24-alpine` with no
-  build toolchain needed.
-- Runs as a non-root user, exposes `3000`, and has a `HEALTHCHECK` against
-  `/healthz`.
-- `/app/data` (the SQLite file) is a volume. Mount it, as above, so data
-  survives container restarts/redeploys — without it, data resets every
-  time the container is recreated.
-- `MCP_API_KEY` is not baked into the image; pass it at `run`/deploy time.
-- The image runs the HTTP entrypoint (`dist/http.js`) by default, not the
-  stdio one.
+The image is a multi-stage build: TypeScript compiles in a builder stage,
+and the runtime stage ships only production `node_modules` and `dist`.
+There are no native modules to compile, so it's a plain `node:24-alpine`
+with no build toolchain needed. It runs as a non-root user, exposes
+`3000`, and has a `HEALTHCHECK` against `/healthz`. `/app/data` is a
+volume — mount it, as above, or data resets every time the container is
+recreated. `MCP_API_KEY` isn't baked into the image; pass it at run or
+deploy time. The image runs the HTTP entrypoint (`dist/http.js`), not the
+stdio one.
 
 To deploy to a specific platform (Fly.io, Render, a plain VPS, ECS, etc.),
 push the built image to that platform's registry/deploy flow and set
@@ -192,59 +182,46 @@ push the built image to that platform's registry/deploy flow and set
 ## Exposing it over HTTPS
 
 `docker-compose.yml` includes a `caddy` service that terminates TLS in
-front of the app and gets a certificate automatically from Let's Encrypt.
+front of the app and gets a certificate from Let's Encrypt automatically.
 The app container no longer publishes port 3000 directly — Caddy is the
-only thing listening on the public ports (80/443), and it proxies to the
-app over the internal Docker network.
+only thing on the public ports (80/443), and proxies to the app over the
+internal Docker network.
 
-Prerequisites on the server:
-- A domain name with a DNS `A` (and/or `AAAA`) record pointing at the
-  server's public IP.
-- Ports 80 and 443 open in the firewall/security group. Port 80 is needed
-  for the ACME HTTP-01 challenge Let's Encrypt uses to issue the
-  certificate, in addition to serving HTTPS on 443.
-
-Then:
+You'll need a domain name with a DNS `A`/`AAAA` record pointing at the
+server, and ports 80 and 443 open — 80 for the ACME HTTP-01 challenge,
+443 for HTTPS itself. Then:
 
 ```bash
 DOMAIN=mcp.example.com MCP_API_KEY=some-long-random-secret docker compose up -d --build
 ```
 
 Caddy requests and renews the certificate for `DOMAIN` automatically and
-stores it in the `caddy-data` volume, so it persists across restarts.
-Point the gateway at `https://mcp.example.com/mcp`.
+stores it in the `caddy-data` volume, so it survives restarts. Point the
+gateway at `https://mcp.example.com/mcp`.
 
-The `Caddyfile` sets `flush_interval -1` on the reverse proxy, which
-disables response buffering — needed because the Streamable HTTP
-transport uses `text/event-stream` responses that must reach the client
-as they're written, not batched up.
+The `Caddyfile` sets `flush_interval -1` on the reverse proxy, disabling
+response buffering — the Streamable HTTP transport's `text/event-stream`
+responses need to reach the client as they're written, not batched up.
 
-If you'd rather not run Caddy yourself:
-- **nginx + certbot** works the same way in principle (reverse proxy to
-  `127.0.0.1:3000` or the app container, certbot for the certificate) but
-  needs more manual config, including disabling proxy buffering
-  (`proxy_buffering off;`) for the same streaming reason.
-- **Cloudflare Tunnel** (or a similar tunnel service) gets you HTTPS
-  without opening any inbound ports on the server at all — useful if the
-  server is behind NAT or you don't want to manage a firewall rule.
-- If you're deploying to a platform (Fly.io, Render, Cloud Run, etc.)
-  instead of a bare server, it likely terminates HTTPS for you already —
-  in that case skip Caddy and just deploy the app image directly.
+Alternatives to running Caddy yourself: nginx + certbot works the same
+way in principle but needs more manual config, including `proxy_buffering
+off;` for the same streaming reason. Cloudflare Tunnel gets you HTTPS
+without opening any inbound ports at all, useful behind NAT. And if
+you're deploying to a platform like Fly.io, Render, or Cloud Run instead
+of a bare server, it likely terminates HTTPS for you already — skip Caddy
+and deploy the app image directly.
 
 ## CI: building the image automatically
 
-`.github/workflows/docker-publish.yml` builds the Docker image and pushes
-it to the GitHub Container Registry (`ghcr.io`) on:
-- every push to `main` (tagged `latest` and with the commit SHA),
-- every pushed tag matching `v*.*.*` (tagged with that semver, plus
-  `major.minor`),
-- pull requests targeting `main` (build-only, not pushed — validates the
-  image still builds),
-- and manually via the "Run workflow" button (`workflow_dispatch`).
+`.github/workflows/docker-publish.yml` builds the image and pushes it to
+the GitHub Container Registry on pushes to `main` (tagged `latest` and
+the commit SHA), on tags matching `v*.*.*` (tagged with that semver plus
+`major.minor`), on PRs targeting `main` (build-only, to catch a broken
+Dockerfile before merge), and manually via `workflow_dispatch`.
 
-It builds for both `linux/amd64` and `linux/arm64`, and uses the GitHub
-Actions cache so incremental builds are fast. It authenticates to `ghcr.io`
-with the repo's built-in `GITHUB_TOKEN` — no registry secrets to set up.
+It builds for both `linux/amd64` and `linux/arm64`, uses the GitHub
+Actions cache, and authenticates to `ghcr.io` with the repo's built-in
+`GITHUB_TOKEN` — no registry secrets to set up.
 
 After the first successful run on `main`, the image is published at:
 
@@ -252,17 +229,14 @@ After the first successful run on `main`, the image is published at:
 ghcr.io/lauramariel/demo-mcp-server:latest
 ```
 
-By default a package published this way is **private**; go to the
-package's settings on GitHub (from the repo's sidebar → Packages) if you
-want it public, or otherwise grant your deploy server access
-(`docker login ghcr.io` with a PAT that has `read:packages`).
+New packages default to private. Change that from the repo's Packages
+sidebar, or grant your deploy server access with `docker login ghcr.io`
+using a PAT that has `read:packages`. If the workflow fails to push with
+a permissions error, check that Settings → Actions → General → Workflow
+permissions is set to "Read and write permissions".
 
-If the workflow fails to push with a permissions error, check
-**Settings → Actions → General → Workflow permissions** is set to "Read
-and write permissions" for the repo.
-
-To run the CI-built image on your server instead of building from source
-there, swap `docker compose up -d --build` for:
+To run the CI-built image instead of building from source on your server,
+swap `docker compose up -d --build` for:
 
 ```bash
 docker pull ghcr.io/lauramariel/demo-mcp-server:latest
@@ -272,9 +246,9 @@ docker run -d --name demo-crm -p 3000:3000 \
   ghcr.io/lauramariel/demo-mcp-server:latest
 ```
 
-(or add `image: ghcr.io/lauramariel/demo-mcp-server:latest` next to
-`build: .` in `docker-compose.yml`, then use `docker compose pull` there
-instead of `--build`).
+Or add `image: ghcr.io/lauramariel/demo-mcp-server:latest` next to
+`build: .` in `docker-compose.yml` and use `docker compose pull` instead
+of `--build`.
 
 ## Using it from Claude Code / Claude Desktop
 
@@ -298,8 +272,7 @@ Or in Claude Desktop's `claude_desktop_config.json`:
 ```
 
 Then ask things like "what's in the pipeline right now?", "create a new
-deal for Acme Robotics", or "log a call with Priya Nair" — the tools read
-and write the SQLite-backed data.
+deal for Acme Robotics", or "log a call with Priya Nair".
 
 ## Project layout
 

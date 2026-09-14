@@ -1,0 +1,5 @@
+{$DOMAIN} {
+	reverse_proxy demo-crm-mcp-server:3000 {
+		flush_interval -1
+	}
+}

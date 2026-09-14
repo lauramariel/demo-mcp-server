@@ -1,0 +1,31 @@
+services:
+  demo-crm-mcp-server:
+    build: .
+    expose:
+      - "3000"
+    environment:
+      - PORT=3000
+      - MCP_API_KEY=${MCP_API_KEY:?set MCP_API_KEY in your environment or a .env file}
+    volumes:
+      - crm-data:/app/data
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    depends_on:
+      - demo-crm-mcp-server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - DOMAIN=${DOMAIN:?set DOMAIN to the hostname this server is reachable at, e.g. mcp.example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    restart: unless-stopped
+
+volumes:
+  crm-data:
+  caddy-data:
+  caddy-config:

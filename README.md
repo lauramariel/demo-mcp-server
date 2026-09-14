@@ -100,6 +100,48 @@ somewhere the gateway can reach (see Docker section below) or, for quick
 local testing, tunnel it with `ngrok http 3000` and use the resulting
 `https://*.ngrok.app/mcp` URL.
 
+### Querying it with curl
+
+Streamable HTTP is session-based, so it's a three-step handshake — POST
+`initialize`, POST the `notifications/initialized` notification, then POST
+whatever request you actually want — reusing the `Mcp-Session-Id` header
+the first response returns:
+
+```bash
+HOST=http://localhost:3000   # or your https:// domain
+KEY=your-mcp-api-key         # omit the Authorization header entirely if MCP_API_KEY is unset
+
+SID=$(curl -s -i -X POST "$HOST/mcp" \
+  -H "Authorization: Bearer $KEY" \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"1.0"}}}' \
+  | grep -i "^mcp-session-id" | tr -d '\r' | cut -d' ' -f2)
+
+curl -s -X POST "$HOST/mcp" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" -H "mcp-session-id: $SID" \
+  -d '{"jsonrpc":"2.0","method":"notifications/initialized"}' -o /dev/null
+
+# list the tools
+curl -s -X POST "$HOST/mcp" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" -H "mcp-session-id: $SID" \
+  -d '{"jsonrpc":"2.0","id":2,"method":"tools/list"}'
+
+# call one
+curl -s -X POST "$HOST/mcp" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" -H "mcp-session-id: $SID" \
+  -d '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"get_pipeline_summary","arguments":{}}}'
+```
+
+The `notifications/initialized` step is required — going straight from
+`initialize` to `tools/list` gets rejected. Responses come back as
+`text/event-stream` (`event: message` / `data: {...}`), not plain JSON,
+since that's what the Streamable HTTP transport uses; the JSON payload is
+the `data:` line.
+
 ## Docker
 
 ```bash

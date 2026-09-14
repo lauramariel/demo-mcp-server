@@ -271,8 +271,33 @@ Or in Claude Desktop's `claude_desktop_config.json`:
 }
 ```
 
-Then ask things like "what's in the pipeline right now?", "create a new
-deal for Acme Robotics", or "log a call with Priya Nair".
+### Sample queries
+
+Reads (work against the seed data right away):
+- "What's in the pipeline right now?"
+- "Which companies are in the Software industry?"
+- "List every company in the CRM"
+- "Who are the contacts at Acme Robotics?"
+- "Find any contact with 'chen' in their email"
+- "What's Mei Lin Chen's title and which company is she at?"
+- "What's the status of the Robotics fleet monitoring rollout deal?"
+- "Show me every deal that's still in the 'lead' stage"
+- "What deals does BluePeak Analytics have open?"
+- "What's the largest deal currently in negotiation?"
+- "Which deals have we lost, and for how much?"
+- "What's the activity history on the Patient records integration deal?"
+- "Search the CRM for anything related to Chen"
+- "Search for 'consulting' across companies, contacts, and deals"
+- "What's our total open pipeline value vs. what we've already won?"
+- "Give me a breakdown of deal count and value by stage"
+
+Writes:
+- "Create a new company called Initech, industry Manufacturing"
+- "Add a contact, Sarah Connor, at Cascade Health Group, title CTO"
+- "Create a deal for Northwind Traders called 'Loyalty program integration', stage qualified"
+- "Move Northwind Traders' POS system upgrade deal to negotiation"
+- "Log a call with Priya Nair about the pilot rollout timeline"
+- "Update Tom Fenwick's email to tom@fenwickito.example"
 
 ## Project layout
 

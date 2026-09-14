@@ -52,19 +52,25 @@ To reset it to the seed data: `npm run reset-db`.
 
 By default the data directory is `data/` next to the project. Set
 `DATA_DIR` to change where the SQLite file is created and read from —
-needed on hosting platforms that restrict which paths a process may write
+useful on hosting platforms that restrict which paths a process may write
 to (for example, a sandboxed agent gateway that only allows writes under
-`/tmp` or `/.cache` and fails startup if a directory is created anywhere
-else):
+`/tmp` or `/.cache`):
 
 ```bash
 DATA_DIR=/tmp/demo-crm-data npm start
 ```
 
-Keep in mind `/tmp` is usually cleared on restart on such platforms, so
-data won't persist there the way it does with a real volume in Docker/K8s
-— that's a property of the platform, not something this server can work
-around.
+If `DATA_DIR` isn't set and the default `data/` directory turns out not to
+be writable (e.g. a read-only container filesystem with no volume mounted
+there), the server automatically falls back to a directory under the OS
+temp dir (`/tmp` on Linux) instead of crashing on startup — so it comes up
+even with no environment configuration at all, though setting `DATA_DIR`
+explicitly is still the more predictable option when you can.
+
+Keep in mind `/tmp` (and similar sandboxed paths) are usually cleared when
+the container/pod is recreated, so data won't persist the way it does with
+a real volume in Docker/K8s — that's a property of the platform, not
+something this server can work around.
 
 ## Running as a remote server (for an MCP gateway)
 

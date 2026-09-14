@@ -1,14 +1,33 @@
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { mkdirSync, existsSync } from "node:fs";
+import { mkdirSync, existsSync, accessSync, constants } from "node:fs";
+import { tmpdir } from "node:os";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
 // Some hosting platforms only allow writes under specific paths (e.g. /tmp
-// or /.cache) and fail startup if a process creates directories elsewhere.
-// DATA_DIR lets the deploy target override where the SQLite file lives;
-// it defaults to a `data/` dir next to the project for local/Docker use.
-const dataDir = process.env.DATA_DIR ?? join(__dirname, "..", "data");
+// or /.cache) and fail startup if a process creates directories elsewhere —
+// and may not give the container a way to set an env var at all. DATA_DIR
+// lets a deploy target explicitly pick where the SQLite file lives; absent
+// that, try the default `data/` dir next to the project (Docker/K8s with a
+// real volume mounted there), and if that isn't writable, fall back to a
+// directory under the OS temp dir (honors $TMPDIR, i.e. /tmp on Linux)
+// rather than crashing on startup.
+function resolveDataDir(): string {
+  if (process.env.DATA_DIR) return process.env.DATA_DIR;
+
+  const preferred = join(__dirname, "..", "data");
+  try {
+    mkdirSync(preferred, { recursive: true });
+    accessSync(preferred, constants.W_OK);
+    return preferred;
+  } catch {
+    return join(tmpdir(), "demo-crm-mcp-server");
+  }
+}
+
+const dataDir = resolveDataDir();
 if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
 const dbPath = join(dataDir, "crm.db");
